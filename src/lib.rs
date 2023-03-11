@@ -2,7 +2,7 @@ use crate::EntryType::*;
 use clap::{App, Arg};
 use regex::Regex;
 use std::error::Error;
-use walkdir::WalkDir;
+use walkdir::{WalkDir, DirEntry};
 
 type MyResult<T> = Result<T, Box< dyn Error>>;
 
@@ -98,14 +98,15 @@ pub fn get_args() -> MyResult<Config> {
 
 pub fn run(config: Config) -> MyResult<()> {
 
+    let mut entries: Vec<DirEntry> = Vec::new();
     for path in config.paths {
         for entry in WalkDir::new(path) {
             match entry {
                 Err(e) => eprintln!("{}",e),
                 Ok(entry) => {
-                    println!("{}", entry.path().display());
+                    //println!("{}", entry.path().display());
                     
-
+                    entries.push(entry);
                 }
                     
                 
@@ -113,5 +114,53 @@ pub fn run(config: Config) -> MyResult<()> {
         }
     }
 
+    let actual_entry_types:Vec<EntryType>;
+
+    if config.entry_types.len() > 0 {
+        actual_entry_types = config.entry_types;
+    }
+    else {
+        actual_entry_types = Vec::from([Dir, File, Link]);
+    }
+
+    //println!("{:?}", actual_entry_types);
+
+    let final_entries = entries.into_iter().filter(|val| {
+        
+        
+        if val.file_type().is_dir() && actual_entry_types.contains(&Dir) {
+            
+            return true;
+        }
+        if val.file_type().is_file() && actual_entry_types.contains(&File) {
+           
+            return true;
+        }
+
+        if val.file_type().is_symlink() && actual_entry_types.contains(&Link) {
+            
+            return true;
+        }
+        false
+    }).filter(|val| {
+        
+        if config.names.len() == 0 {
+            return true;
+        }
+
+        for name in &config.names {
+            if name.is_match(val.path().file_name().unwrap().to_str().unwrap()) {
+                return true;
+            }
+        }
+        false
+
+    }).collect::<Vec<DirEntry>>();
+
+    for entry in final_entries {
+        println!("{}", entry.path().display());
+        
+    }
+        
     Ok(())
 }
